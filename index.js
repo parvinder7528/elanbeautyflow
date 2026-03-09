@@ -9,7 +9,6 @@ import { fileURLToPath } from "url";
 // Load env
 dotenv.config();
 
-// Create app
 const app = express();
 
 // Fix __dirname for ES module
@@ -24,31 +23,16 @@ app.use(cors({
   origin:["https://elanbeauty.com.au","http://localhost:8080"],
   credentials:true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // API routes
 app.use("/api", adminRoutes);
 
-/* ✅ SERVE FRONTEND DIST FOLDER */
-// const frontendPath = path.join(__dirname, "../Frontend/dist");
-// console.log(frontendPath,"frontendPathfrontendPathfrontendPath")
-// app.use(express.static(frontendPath));
-app.use(
-  "/assets",
-  express.static(path.join(__dirname, "dist/assets"))
-);
+// Test route
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+  res.json({ message: "API is working 🚀" });
 });
 
-// React Router support (VERY IMPORTANT)
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(frontendPath, "index.html"));
-// });
-
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`✅ Backend running on http://localhost:${PORT}`);
-});
+export default app;
