@@ -15,7 +15,7 @@ connectDB();
 // Middleware
 app.use(
   cors({
-    origin: ["https://elanbeauty.com.au", "http://localhost:8080"],
+    origin: ["https://www.elanbeauty.com.au","https://elanbeautyflow.vercel.app" ,"http://localhost:8080"],
     credentials: true,
   })
 );
