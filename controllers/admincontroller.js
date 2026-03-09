@@ -385,135 +385,142 @@ getTopBookings: async (req, res) => {
     });
   }
 },
-  userPurchaseHistory: async (req, res) => {
-    try {
-      const user = req.user;
+ userPurchaseHistory: async (req, res) => {
+  try {
+    const user = req.user;
 
-      const location = user?.location?.toLowerCase() || "";
+    const location = user?.location?.toLowerCase().trim() || "";
 
-      const services = await schemaModel.BookingModel.find({
-        location: {
-          $regex: location.slice(0, Math.ceil(location.length * 0.6)),
-          $options: "i"
+    // convert regent-park → regent[-\s]?park
+    const locationRegex = location.replace(/[-\s]/g, "[-\\s]?");
+
+    const services = await schemaModel.BookingModel.find({
+      location: {
+        $regex: locationRegex,
+        $options: "i"
+      }
+    })
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 });
+
+    const formatted = services.map((item) => ({
+      id: item._id,
+      name: item.userId?.name,
+      email: item.userId?.email,
+      service: item.serviceName,
+      purchaseDate: item.createdAt,
+      price: item.price,
+      status: item.status,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formatted,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching purchased services",
+      error: error.message,
+    });
+  }
+},
+userServiceStats: async (req, res) => {
+  try {
+    const user = req.user;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const next3Days = new Date();
+    next3Days.setDate(today.getDate() + 3);
+
+    const location = user?.location?.toLowerCase().trim() || "";
+
+    // convert regent-park → regent[-\s]?park
+    const locationRegex = location.replace(/[-\s]/g, "[-\\s]?");
+
+    const stats = await schemaModel.BookingModel.aggregate([
+      {
+        $match: {
+          location: {
+            $regex: locationRegex,
+            $options: "i"
+          }
         }
-      })
-        .populate("userId", "name email")
-        .sort({ createdAt: -1 });
-
-      const formatted = services.map((item) => ({
-        id: item._id,
-        name: item.userId?.name,
-        email: item.userId?.email,
-        service: item.serviceName,
-        purchaseDate: item.createdAt,
-        price: item.price,
-        status: item.status,
-      }));
-
-      res.status(200).json({
-        success: true,
-        data: formatted,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error fetching purchased services",
-        error: error.message,
-      });
-    }
-  },
-  userServiceStats: async (req, res) => {
-    try {
-      const user = req.user
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const next3Days = new Date();
-      next3Days.setDate(today.getDate() + 3);
-      const location = user?.location?.toLowerCase() || "";
-
-
-      const stats = await schemaModel.BookingModel.aggregate([
-        {
-          $match: {
-            location: {
-              $regex: location.slice(0, Math.ceil(location.length * 0.6)),
-              $options: "i"
-            }
-          }
-        },
-        {
-          $addFields: {
-            bookingOnlyDate: {
-              $dateTrunc: {
-                date: "$bookingDate",
-                unit: "day"
-              }
-            }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-
-            expired: {
-              $sum: {
-                $cond: [
-                  { $lt: ["$bookingOnlyDate", today] },
-                  1,
-                  0
-                ]
-              }
-            },
-
-            expiring: {
-              $sum: {
-                $cond: [
-                  {
-                    $and: [
-                      { $gte: ["$bookingOnlyDate", today] },
-                      { $lte: ["$bookingOnlyDate", next3Days] }
-                    ]
-                  },
-                  1,
-                  0
-                ]
-              }
-            },
-
-            active: {
-              $sum: {
-                $cond: [
-                  { $gt: ["$bookingOnlyDate", next3Days] },
-                  1,
-                  0
-                ]
-              }
+      },
+      {
+        $addFields: {
+          bookingOnlyDate: {
+            $dateTrunc: {
+              date: "$bookingDate",
+              unit: "day"
             }
           }
         }
-      ]);
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
 
-      res.status(200).json({
-        success: true,
-        data: stats[0] || {
-          total: 0,
-          active: 0,
-          expiring: 0,
-          expired: 0
+          expired: {
+            $sum: {
+              $cond: [
+                { $lt: ["$bookingOnlyDate", today] },
+                1,
+                0
+              ]
+            }
+          },
+
+          expiring: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gte: ["$bookingOnlyDate", today] },
+                    { $lte: ["$bookingOnlyDate", next3Days] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+
+          active: {
+            $sum: {
+              $cond: [
+                { $gt: ["$bookingOnlyDate", next3Days] },
+                1,
+                0
+              ]
+            }
+          }
         }
-      });
+      }
+    ]);
 
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error fetching booking stats",
-        error: error.message
-      });
-    }
-  },
+    res.status(200).json({
+      success: true,
+      data: stats[0] || {
+        total: 0,
+        active: 0,
+        expiring: 0,
+        expired: 0
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching booking stats",
+      error: error.message
+    });
+  }
+},
   dashboardStats: async (req, res) => {
     try {
       const now = new Date();
