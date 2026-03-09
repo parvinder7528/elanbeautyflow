@@ -306,77 +306,85 @@ const admincontroller = {
       });
     }
   },
-  getBookingList: async (req, res) => {
-    try {
-      const user = req.user;
+ getBookingList: async (req, res) => {
+  try {
+    const user = req.user;
 
-      const location = user?.location?.toLowerCase() || "";
+    // Normalize location
+    const location = user?.location?.toLowerCase().trim() || "";
 
-      const bookings = await schemaModel.BookingModel.find({
-        location: {
-          $regex: location.slice(0, Math.ceil(location.length * 0.6)),
-          $options: "i"
-        }
-      })
-        .populate("userId", "name email phone createdAt")
-        .sort({ createdAt: -1 });
+    // Replace dash or spaces for flexible match
+    const locationRegex = location.replace(/[-\s]/g, "[-\\s]?");
 
-      res.status(200).json({
-        success: true,
-        count: bookings.length,
-        data: bookings,
-      });
+    const bookings = await schemaModel.BookingModel.find({
+      location: {
+        $regex: locationRegex,
+        $options: "i"
+      }
+    })
+      .populate("userId", "name email phone createdAt")
+      .sort({ createdAt: -1 });
 
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error fetching recent bookings",
-        error: error.message,
-      });
-    }
-  },
-  getTopBookings: async (req, res) => {
-    try {
-      const user = req.user;
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      data: bookings,
+    });
 
-      const location = user?.location?.toLowerCase() || "";
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching recent bookings",
+      error: error.message,
+    });
+  }
+},
+getTopBookings: async (req, res) => {
+  try {
+    const user = req.user;
 
-      const topServices = await schemaModel.BookingModel.aggregate([
-        {
-          $match: {
-            location: {
-              $regex: location.slice(0, Math.ceil(location.length * 0.6)),
-              $options: "i"
-            }
+    const location = user?.location?.toLowerCase().trim() || "";
+
+    // make flexible regex (regent-park → regent[-\s]?park)
+    const locationRegex = location.replace(/[-\s]/g, "[-\\s]?");
+
+    const topServices = await schemaModel.BookingModel.aggregate([
+      {
+        $match: {
+          location: {
+            $regex: locationRegex,
+            $options: "i"
           }
-        },
-        {
-          $group: {
-            _id: "$serviceName",
-            totalBookings: { $sum: 1 },
-            totalRevenue: { $sum: "$price" },
-          },
-        },
-        {
-          $sort: { totalBookings: -1 },
-        },
-        {
-          $limit: 5,
-        },
-      ]);
+        }
+      },
+      {
+        $group: {
+          _id: "$serviceName",
+          totalBookings: { $sum: 1 },
+          totalRevenue: { $sum: "$price" }
+        }
+      },
+      {
+        $sort: { totalBookings: -1 }
+      },
+      {
+        $limit: 5
+      }
+    ]);
 
-      res.status(200).json({
-        success: true,
-        data: topServices,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error fetching top services",
-        error: error.message,
-      });
-    }
-  },
+    res.status(200).json({
+      success: true,
+      data: topServices
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching top services",
+      error: error.message
+    });
+  }
+},
   userPurchaseHistory: async (req, res) => {
     try {
       const user = req.user;
